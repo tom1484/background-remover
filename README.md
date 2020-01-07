@@ -1,3 +1,43 @@
 # Background Remover
 
-This is a background remover built with keras.
+## Overview
+
+To remove objects from images, there are several algorithms:
+
+* **Clustering**
+    * It usually partition the image into several clusters.
+    * K-means is a well known method.
+* **Thresholding**
+    * The simplest method.
+    * The key is to select a threshold value and then compare to each pixel.
+* **Region Growing**
+    * Mainly relies on the that the neighbors in same region should be similar.
+* **Deep Learing**
+    * It has an enormous achievement on this field.
+    * Usually be implemented with convolutional layers.
+
+All of them are very powerful and interesting, but we'll implement the remover with **deep learing**. 
+
+## CNN (Convolutional Neural Network)
+
+In deep learning, tasks about image are often solved with **CNN**. <br>
+CNN has some powerful benefits:
+* It takes important features from images, such as edges.
+* In deep learning, it reduces the number of parameters, but has better performance.
+* Network can be calculated on GPUs more faseter than on CPUs.
+
+## Model Explain
+
+There are many models for image segmentation made by well known organizations and researchers. <br>
+We'll use **U-Net** in this example.
+
+### U-Net
+
+In traditional models, layers are usually connected to the next one. <br>
+While more maxpooling layers inputs go through, the more features are lost.
+
+U-Net solve this problem in a clever way. <br>
+<img src="https://img-blog.csdn.net/20181022150306666?watermark/2/text/aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L2dpdGh1Yl8zNjkyMzQxOA==/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70" width="70%">
+
+It add outputs from encoder to layers of decoder directly, so the decoder can use more details.
+
