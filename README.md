@@ -185,3 +185,78 @@ val_frames_path = "frames/val"
 val_masks_path = "masks/val"
 val_generator = generator(val_frames_path, val_masks_path, batch_size, img_shape, num_val)
 ```
+
+segmentation-models is an library that provides several models for image segmentation. <br>
+You can see more details on [github](https://github.com/qubvel/segmentation_models).
+
+```python
+import segmentation_models as sm
+
+model = sm.Unet("resnet34", input_shape=img_shape + (3, ))
+model.compile("Adam", loss=sm.losses.bce_jaccard_loss, metrics=[sm.metrics.iou_score])
+model.summary()
+```
+
+Train the model for 100 eopchs and save weights.
+
+```python
+model.fit_generator(train_generator, 
+                    steps_per_epoch=num_train / batch_size, 
+                    epochs=100, 
+                    validation_data=val_generator, 
+                    validation_steps=num_val / batch_size)
+
+model.save_weights("unet-100.h5")
+```
+
+```python
+model.evaluate_generator(val_generator, 
+                         steps=num_val / batch_size)
+```
+
+Read test images.
+
+```python
+import cv2
+
+def frame_generator(frames_path, img_shape):
+    
+    frames_path = glob.glob(join(frames_path, "*.jpg"))
+    np.random.shuffle(frames_path)
+    
+    i = 0
+    while True:
+        
+        if i == len(frames_path):
+            i = 0
+        
+        frame = cv2.imread(frames_path[i])
+        frame = cv2.resize(frame, img_shape)
+        yield frame
+        i += 1
+
+test_generator = frame_generator("frames/test", img_shape)
+```
+
+Visualize results with matplotlib.
+
+```python
+import matplotlib.pyplot as plt
+
+frame = next(test_generator)
+res = model.predict(np.array([frame]))[0]
+
+plt.figure(figsize=(10, 10))
+
+ax = plt.subplot(1, 2, 1)
+# cv2 read image in BGR mode
+plt.imshow(frame[:,:,::-1])
+
+# convert mask into three-chennel image
+res = np.repeat(res, 3, axis=2)
+# set average value as treshold to cut off the foreground
+np.putmask(frame, res < np.average(res), frame * 0)
+
+ax = plt.subplot(1, 2, 2)
+plt.imshow(frame[:,:,::-1])
+```
