@@ -41,3 +41,36 @@ U-Net solve this problem in a clever way. <br>
 
 It add outputs from encoder to layers of decoder directly, so the decoder can use more details.
 
+## Prepare Dataset
+
+Before building model, we should prepare our data first. <br>
+We'll use images from **COCO dataset** to train the model.
+
+Download train, validation and test dataset.
+
+```
+!wget http://images.cocodataset.org/zips/train2017.zip
+!wget http://images.cocodataset.org/zips/val2017.zip
+!wget http://images.cocodataset.org/zips/test2017.zip
+```
+
+Extract all datasets.
+
+```
+!unzip train2017.zip
+!unzip val2017.zip
+!unzip test2017.zip
+```
+
+To use COCO dataset for training, we need **annotation** files to get masks of segmentation.
+
+```
+!wget http://images.cocodataset.org/annotations/annotations_trainval2017.zip
+!unzip annotations_trainval2017.zip
+```
+
+Now, you should have three datasets and several json files in annotation folder. <br>
+Next, we have to preprocess the images by creating mask images.
+
+Load data information from annotations.
+
