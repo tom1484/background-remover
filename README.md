@@ -93,7 +93,7 @@ from pycocotools.coco import COCO
 
 
 ```python
-# annotations/instancesfree
+# annotations/instances
 # {dataset}2017.json
 path = "annotations/instances_train2017.json"
 data = COCO(path)
