@@ -45,9 +45,10 @@ It add outputs from encoder to layers of decoder directly, so the decoder can us
 
 Linknet consists of several encoders and decoders. <br>
 Skip connections directly pass details from encoders to encoders. <br>
-More details on GitHub: [Linknet](https://github.com/e-lab/LinkNet)
 
 <img src="https://www.researchgate.net/publication/323570662/figure/fig2/AS:601018588991488@1520305406425/Fig-These-segmentation-networks-are-based-on-encoder-decoder-network-of-U-Net-family.png" width="80%">
+
+More details on GitHub: [Linknet](https://github.com/e-lab/LinkNet)
 
 ## Prepare Dataset
 
