@@ -29,7 +29,7 @@ CNN has some powerful benefits:
 ## Model Explain
 
 There are many models for image segmentation made by well known organizations and researchers. <br>
-We'll use **U-Net** in this example.
+We'll use **Linknet** in this example.
 
 ### U-Net
 
@@ -40,6 +40,14 @@ U-Net solve this problem in a clever way. <br>
 <img src="https://img-blog.csdn.net/20181022150306666?watermark/2/text/aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L2dpdGh1Yl8zNjkyMzQxOA==/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70" width="70%">
 
 It add outputs from encoder to layers of decoder directly, so the decoder can use more details.
+
+### Linknet
+
+Linknet consists of several encoders and decoders. <br>
+Skip connections directly pass details from encoders to encoders. <br>
+More details on GitHub: [Linknet](https://github.com/e-lab/LinkNet)
+
+<img src="https://www.researchgate.net/publication/323570662/figure/fig2/AS:601018588991488@1520305406425/Fig-These-segmentation-networks-are-based-on-encoder-decoder-network-of-U-Net-family.png" width="80%">
 
 ## Prepare Dataset
 
