@@ -142,7 +142,7 @@ for imgId in data.getImgIds():
 
 ## Build Model
 
-In this example, we'll use 6400 samples for training, 1600 for validation.
+In this example, we'll use 8000 samples for training, 1600 for validation.
 
 
 ```python
