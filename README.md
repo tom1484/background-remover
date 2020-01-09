@@ -48,25 +48,28 @@ We'll use images from **COCO dataset** to train the model.
 
 Download train, validation and test dataset.
 
-```
-!wget http://images.cocodataset.org/zips/train2017.zip
-!wget http://images.cocodataset.org/zips/val2017.zip
-!wget http://images.cocodataset.org/zips/test2017.zip
+
+```python
+# !wget http://images.cocodataset.org/zips/train2017.zip data/
+# !wget http://images.cocodataset.org/zips/val2017.zip data/
+# !wget http://images.cocodataset.org/zips/test2017.zip data/
 ```
 
 Extract all datasets.
 
-```
-!unzip train2017.zip
-!unzip val2017.zip
-!unzip test2017.zip
+
+```python
+# !unzip train2017.zip
+# !unzip val2017.zip
+# !unzip test2017.zip
 ```
 
 To use COCO dataset for training, we need **annotation** files to get masks of segmentation.
 
-```
-!wget http://images.cocodataset.org/annotations/annotations_trainval2017.zip
-!unzip annotations_trainval2017.zip
+
+```python
+# !wget http://images.cocodataset.org/annotations/annotations_trainval2017.zip
+# !unzip annotations_trainval2017.zip
 ```
 
 Now, you should have three datasets and several json files in annotation folder. <br>
@@ -74,189 +77,862 @@ Next, we have to preprocess the images by creating mask images.
 
 Load data information from annotations.
 
-```python
-from pycocotools.coco import COCO
-# annotations/instances_{dataset}2017.json
-path = join(home, "annotations/instances_train2017.json")
-data = COCO(path)
-```
-
-We only need images that ccontain person.
 
 ```python
-import numpy as np
-import cv2
-from os.path import join
-
-i = 0
-images, masks = [], []
-for img in data.loadImgs(data.getImgIds()):
-    
-    valid = False
-    anns = data.loadAnns(data.getAnnIds(imgId))
-
-    mask = np.zeros((img["height"], img["width"]), dtype=np.byte)
-    for ann in anns:
-        
-        # category id of person is 1
-        if ann["category_id"] == 1:
-            seg = data.annToMask(ann)
-            mask += seg
-            valid = True
-    
-    # if contains person
-    if valid:
-        
-        file_name = img["file_name"]
-        # {dataset}2017
-        frame = cv2.imread("train2017" + file_name)
-        # frames/{dataset}
-        cv2.imwrite(join("frames/train", file_name), image)
-        # masks/{dataset}
-        cv2.imwrite(join("masks/train", file_name), mask)
-        i += 1
+# from pycocotools.coco import COCO
 ```
+
+
+```python
+# # annotations/instancesfree
+# # {dataset}2017.json
+# path = "annotations/instances_train2017.json"
+# data = COCO(path)
+```
+
+We only need images that contain person.
+
+
+```python
+# import numpy as np
+# import cv2
+# from os.path import join
+```
+
+
+```python
+# i = 0
+# images, masks = [], []
+# for imgId in data.getImgIds():
+    
+#     img = data.loadImgs(imgId)[0]
+    
+#     valid = False
+#     anns = data.loadAnns(data.getAnnIds(imgId))
+
+#     mask = np.zeros((img["height"], img["width"]), dtype=np.byte)
+#     for ann in anns:
+        
+#         # category id of person is 1
+#         if ann["category_id"] == 1:
+#             seg = data.annToMask(ann)
+#             mask += seg
+#             valid = True
+    
+#     # if contains person
+#     if valid:
+        
+#         file_name = img["file_name"]
+#         # {dataset}2017
+#         frame = cv2.imread(join("train2017", file_name))
+#         # frames/{dataset}
+#         cv2.imwrite(join("data/frames/train", file_name), frame)
+#         # masks/{dataset}
+#         cv2.imwrite(join("data/masks/train", file_name), mask)
+#         i += 1
+```
+
+
+```python
+!ls -l data/frames/train | wc -l
+```
+
+    64116
+
 
 ## Build Model
 
-In this example, we'll use 16000 samples for training.
+In this example, we'll use 6400 samples for training, 1600 for validation.
+
 
 ```python
 # input image shape
 img_shape = (256, 256)
-batch_size = 32
-num_train = 500 * batch_size
-num_val = 50 * batch_size
+batch_size = 16
+n_train = 500 * batch_size
+n_val = 100 * batch_size
 ```
+
 
 ```python
 import cv2
 import glob
 from os.path import join, expanduser
 import numpy as np
-
-# define our own pipeline
-def generator(frames_path, masks_path, batch_size, img_shape, num_data=None):
-    frames_path = glob.glob(join(frames_path, "*.jpg"))
-    frames_path = sorted(frames_path, key=lambda path: int(path.split('/')[-1].split('.')[0]))
-    masks_path = glob.glob(join(masks_path, "*.jpg"))
-    masks_path = sorted(masks_path, key=lambda path: int(path.split('/')[-1].split('.')[0]))
-
-    # use all samples
-    if num_data is None:
-        num_data = len(frames_path)
-    order = np.arange(num_data)
-    np.random.shuffle(order)
-
-    base = 0
-    while True:
-
-        if base == num_data - 1:
-            np.random.shuffle(order)
-            base = 0
-
-        frames, masks = [], []
-        for i in range(batch_size):
-            
-            # this ensure that we get correct number of samples
-            idx = order[(base + i) % num_data]
-            
-            frame = cv2.imread(frames_path[idx]).astype(np.float32)
-            frame = cv2.resize(frame, img_shape)
-            mask = cv2.imread(masks_path[idx], cv2.IMREAD_GRAYSCALE).astype(np.float32)
-            mask = cv2.resize(mask, img_shape).reshape(img_shape + (1, ))
-
-            frames.append(frame)
-            masks.append(mask)
-
-        base += batch_size
-
-        # yield makes function iterateble
-        yield np.array(frames), np.array(masks)
-        del frames, masks, frame, mask, idx
 ```
+
 
 ```python
-train_frames_path = "frames/train"
-train_masks_path = "masks/train"
-train_generator = generator(train_frames_path, train_masks_path, batch_size, img_shape, num_train)
+# this handles all requests for data
+class generator:
+    
+    def __init__(self, frames_dir, masks_dir, img_shape, n_data=None, start=0):
+        
+        frames_path = glob.glob(join(frames_dir, "*.jpg"))
+        self.frames_path = sorted(frames_path, key=lambda path: int(path.split('/')[-1].split('.')[0]))
+        
+        if masks_dir is None:
+            self.masks_path = [""] * len(frames_path)
+        else:
+            masks_path = glob.glob(join(masks_dir, "*.jpg"))
+            self.masks_path = sorted(masks_path, key=lambda path: int(path.split('/')[-1].split('.')[0]))
+        
+        # use all samples
+        if n_data is None:
+            n_data = len(frames_path)
+        self.n_data = n_data
+        
+        self.img_shape = img_shape
+        # used for shuffling
+        self.order = np.arange(n_data) + start
+        
+    def __getitem__(self, key):
+        
+        if isinstance(key, slice):
+            start, stop, step = key.indices(self.n_data)
+            frames, masks = [], []
+            
+            for i in range(start, stop):
+                frame, mask = self.get_data(
+                    self.frames_path[self.order[i]], self.masks_path[self.order[i]]
+                )
+                frames.append(frame)
+                masks.append(mask)
+                
+            return np.array(frames), np.array(masks)
+        else:
+            return self.get_data(
+                self.frames_path[self.order[key]], self.masks_path[self.order[key]]
+            )
+    
+    def __len__(self):
+        return self.n_data
+    
+    def get_data(self, frame_path, mask_path):
+        
+        frame = cv2.imread(frame_path).astype(np.float32)
+        mask = cv2.imread(mask_path)
+        if mask is not None:
+            mask = mask.astype(np.float32)[:,:,:1]
+        
+        return frame, mask
+    
+    def iterator(self, batch_size=None, shuffle=False):
+        
+        if batch_size is None :
+            batch_size = self.n_data
+        
+        base = 0
+        while True:
+            
+            if shuffle and base == 0:
+                np.random.shuffle(self.order)
+            
+            # yield makes function iterateble
+            yield self[base:base + batch_size]
 
-val_frames_path = "frames/val"
-val_masks_path = "masks/val"
-val_generator = generator(val_frames_path, val_masks_path, batch_size, img_shape, num_val)
+            base += batch_size
+            # ensure the iterator runs forever
+            if base + batch_size > self.n_data:
+                base = 0
 ```
+
+
+```python
+train_frames_path = "data-256/frames/train"
+train_masks_path = "data-256/masks/train"
+train_generator = generator(
+    train_frames_path, 
+    train_masks_path, 
+    img_shape, 
+    n_train
+)
+
+val_frames_path = "data-256/frames/val"
+val_masks_path = "data-256/masks/val"
+val_generator = generator(
+    val_frames_path, 
+    val_masks_path, 
+    img_shape, 
+    n_val
+)
+```
+
+Let's see what we have now.
+
+
+```python
+import matplotlib.pyplot as plt
+```
+
+
+```python
+frame, mask = train_generator[0]
+frame = frame.astype(np.int32)
+mask = mask.astype(np.int32)
+
+plt.figure(figsize=(10, 5))
+
+plt.subplot(1, 2, 1)
+# cv2 read image in BGR mode
+plt.imshow(frame[:,:,::-1])
+
+plt.xticks([])
+plt.yticks([])
+
+plt.subplot(1, 2, 2)
+plt.imshow(mask[:,:,0])
+
+plt.xticks([])
+plt.yticks([])
+
+plt.show()
+```
+
+
+![png](img/output_29_0.png)
+
 
 segmentation-models is an library that provides several models for image segmentation. <br>
 You can see more details on [github](https://github.com/qubvel/segmentation_models).
 
+
 ```python
 import segmentation_models as sm
+import keras
 
 model = sm.Unet("resnet34", input_shape=img_shape + (3, ))
-model.compile("Adam", loss=sm.losses.bce_jaccard_loss, metrics=[sm.metrics.iou_score])
+
+optimizer = keras.optimizers.Adam(1e-4)
+loss = sm.losses.bce_jaccard_loss
+metrics = [sm.metrics.iou_score]
+
+model.compile(optimizer, loss,  metrics)
 model.summary()
 ```
 
-Train the model for 100 eopchs and save weights.
+    Using TensorFlow backend.
+
+
+    Segmentation Models: using `keras` framework.
+    WARNING:tensorflow:From /home/tom2003611/.local/lib/python3.7/site-packages/tensorflow/python/ops/nn_impl.py:182: add_dispatch_support.<locals>.wrapper (from tensorflow.python.ops.array_ops) is deprecated and will be removed in a future version.
+    Instructions for updating:
+    Use tf.where in 2.0, which has the same broadcast rule as np.where
+    Model: "model_2"
+    __________________________________________________________________________________________________
+    Layer (type)                    Output Shape         Param #     Connected to                     
+    ==================================================================================================
+    data (InputLayer)               (None, 256, 256, 3)  0                                            
+    __________________________________________________________________________________________________
+    bn_data (BatchNormalization)    (None, 256, 256, 3)  9           data[0][0]                       
+    __________________________________________________________________________________________________
+    zero_padding2d_1 (ZeroPadding2D (None, 262, 262, 3)  0           bn_data[0][0]                    
+    __________________________________________________________________________________________________
+    conv0 (Conv2D)                  (None, 128, 128, 64) 9408        zero_padding2d_1[0][0]           
+    __________________________________________________________________________________________________
+    bn0 (BatchNormalization)        (None, 128, 128, 64) 256         conv0[0][0]                      
+    __________________________________________________________________________________________________
+    relu0 (Activation)              (None, 128, 128, 64) 0           bn0[0][0]                        
+    __________________________________________________________________________________________________
+    zero_padding2d_2 (ZeroPadding2D (None, 130, 130, 64) 0           relu0[0][0]                      
+    __________________________________________________________________________________________________
+    pooling0 (MaxPooling2D)         (None, 64, 64, 64)   0           zero_padding2d_2[0][0]           
+    __________________________________________________________________________________________________
+    stage1_unit1_bn1 (BatchNormaliz (None, 64, 64, 64)   256         pooling0[0][0]                   
+    __________________________________________________________________________________________________
+    stage1_unit1_relu1 (Activation) (None, 64, 64, 64)   0           stage1_unit1_bn1[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_3 (ZeroPadding2D (None, 66, 66, 64)   0           stage1_unit1_relu1[0][0]         
+    __________________________________________________________________________________________________
+    stage1_unit1_conv1 (Conv2D)     (None, 64, 64, 64)   36864       zero_padding2d_3[0][0]           
+    __________________________________________________________________________________________________
+    stage1_unit1_bn2 (BatchNormaliz (None, 64, 64, 64)   256         stage1_unit1_conv1[0][0]         
+    __________________________________________________________________________________________________
+    stage1_unit1_relu2 (Activation) (None, 64, 64, 64)   0           stage1_unit1_bn2[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_4 (ZeroPadding2D (None, 66, 66, 64)   0           stage1_unit1_relu2[0][0]         
+    __________________________________________________________________________________________________
+    stage1_unit1_conv2 (Conv2D)     (None, 64, 64, 64)   36864       zero_padding2d_4[0][0]           
+    __________________________________________________________________________________________________
+    stage1_unit1_sc (Conv2D)        (None, 64, 64, 64)   4096        stage1_unit1_relu1[0][0]         
+    __________________________________________________________________________________________________
+    add_1 (Add)                     (None, 64, 64, 64)   0           stage1_unit1_conv2[0][0]         
+                                                                     stage1_unit1_sc[0][0]            
+    __________________________________________________________________________________________________
+    stage1_unit2_bn1 (BatchNormaliz (None, 64, 64, 64)   256         add_1[0][0]                      
+    __________________________________________________________________________________________________
+    stage1_unit2_relu1 (Activation) (None, 64, 64, 64)   0           stage1_unit2_bn1[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_5 (ZeroPadding2D (None, 66, 66, 64)   0           stage1_unit2_relu1[0][0]         
+    __________________________________________________________________________________________________
+    stage1_unit2_conv1 (Conv2D)     (None, 64, 64, 64)   36864       zero_padding2d_5[0][0]           
+    __________________________________________________________________________________________________
+    stage1_unit2_bn2 (BatchNormaliz (None, 64, 64, 64)   256         stage1_unit2_conv1[0][0]         
+    __________________________________________________________________________________________________
+    stage1_unit2_relu2 (Activation) (None, 64, 64, 64)   0           stage1_unit2_bn2[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_6 (ZeroPadding2D (None, 66, 66, 64)   0           stage1_unit2_relu2[0][0]         
+    __________________________________________________________________________________________________
+    stage1_unit2_conv2 (Conv2D)     (None, 64, 64, 64)   36864       zero_padding2d_6[0][0]           
+    __________________________________________________________________________________________________
+    add_2 (Add)                     (None, 64, 64, 64)   0           stage1_unit2_conv2[0][0]         
+                                                                     add_1[0][0]                      
+    __________________________________________________________________________________________________
+    stage1_unit3_bn1 (BatchNormaliz (None, 64, 64, 64)   256         add_2[0][0]                      
+    __________________________________________________________________________________________________
+    stage1_unit3_relu1 (Activation) (None, 64, 64, 64)   0           stage1_unit3_bn1[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_7 (ZeroPadding2D (None, 66, 66, 64)   0           stage1_unit3_relu1[0][0]         
+    __________________________________________________________________________________________________
+    stage1_unit3_conv1 (Conv2D)     (None, 64, 64, 64)   36864       zero_padding2d_7[0][0]           
+    __________________________________________________________________________________________________
+    stage1_unit3_bn2 (BatchNormaliz (None, 64, 64, 64)   256         stage1_unit3_conv1[0][0]         
+    __________________________________________________________________________________________________
+    stage1_unit3_relu2 (Activation) (None, 64, 64, 64)   0           stage1_unit3_bn2[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_8 (ZeroPadding2D (None, 66, 66, 64)   0           stage1_unit3_relu2[0][0]         
+    __________________________________________________________________________________________________
+    stage1_unit3_conv2 (Conv2D)     (None, 64, 64, 64)   36864       zero_padding2d_8[0][0]           
+    __________________________________________________________________________________________________
+    add_3 (Add)                     (None, 64, 64, 64)   0           stage1_unit3_conv2[0][0]         
+                                                                     add_2[0][0]                      
+    __________________________________________________________________________________________________
+    stage2_unit1_bn1 (BatchNormaliz (None, 64, 64, 64)   256         add_3[0][0]                      
+    __________________________________________________________________________________________________
+    stage2_unit1_relu1 (Activation) (None, 64, 64, 64)   0           stage2_unit1_bn1[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_9 (ZeroPadding2D (None, 66, 66, 64)   0           stage2_unit1_relu1[0][0]         
+    __________________________________________________________________________________________________
+    stage2_unit1_conv1 (Conv2D)     (None, 32, 32, 128)  73728       zero_padding2d_9[0][0]           
+    __________________________________________________________________________________________________
+    stage2_unit1_bn2 (BatchNormaliz (None, 32, 32, 128)  512         stage2_unit1_conv1[0][0]         
+    __________________________________________________________________________________________________
+    stage2_unit1_relu2 (Activation) (None, 32, 32, 128)  0           stage2_unit1_bn2[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_10 (ZeroPadding2 (None, 34, 34, 128)  0           stage2_unit1_relu2[0][0]         
+    __________________________________________________________________________________________________
+    stage2_unit1_conv2 (Conv2D)     (None, 32, 32, 128)  147456      zero_padding2d_10[0][0]          
+    __________________________________________________________________________________________________
+    stage2_unit1_sc (Conv2D)        (None, 32, 32, 128)  8192        stage2_unit1_relu1[0][0]         
+    __________________________________________________________________________________________________
+    add_4 (Add)                     (None, 32, 32, 128)  0           stage2_unit1_conv2[0][0]         
+                                                                     stage2_unit1_sc[0][0]            
+    __________________________________________________________________________________________________
+    stage2_unit2_bn1 (BatchNormaliz (None, 32, 32, 128)  512         add_4[0][0]                      
+    __________________________________________________________________________________________________
+    stage2_unit2_relu1 (Activation) (None, 32, 32, 128)  0           stage2_unit2_bn1[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_11 (ZeroPadding2 (None, 34, 34, 128)  0           stage2_unit2_relu1[0][0]         
+    __________________________________________________________________________________________________
+    stage2_unit2_conv1 (Conv2D)     (None, 32, 32, 128)  147456      zero_padding2d_11[0][0]          
+    __________________________________________________________________________________________________
+    stage2_unit2_bn2 (BatchNormaliz (None, 32, 32, 128)  512         stage2_unit2_conv1[0][0]         
+    __________________________________________________________________________________________________
+    stage2_unit2_relu2 (Activation) (None, 32, 32, 128)  0           stage2_unit2_bn2[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_12 (ZeroPadding2 (None, 34, 34, 128)  0           stage2_unit2_relu2[0][0]         
+    __________________________________________________________________________________________________
+    stage2_unit2_conv2 (Conv2D)     (None, 32, 32, 128)  147456      zero_padding2d_12[0][0]          
+    __________________________________________________________________________________________________
+    add_5 (Add)                     (None, 32, 32, 128)  0           stage2_unit2_conv2[0][0]         
+                                                                     add_4[0][0]                      
+    __________________________________________________________________________________________________
+    stage2_unit3_bn1 (BatchNormaliz (None, 32, 32, 128)  512         add_5[0][0]                      
+    __________________________________________________________________________________________________
+    stage2_unit3_relu1 (Activation) (None, 32, 32, 128)  0           stage2_unit3_bn1[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_13 (ZeroPadding2 (None, 34, 34, 128)  0           stage2_unit3_relu1[0][0]         
+    __________________________________________________________________________________________________
+    stage2_unit3_conv1 (Conv2D)     (None, 32, 32, 128)  147456      zero_padding2d_13[0][0]          
+    __________________________________________________________________________________________________
+    stage2_unit3_bn2 (BatchNormaliz (None, 32, 32, 128)  512         stage2_unit3_conv1[0][0]         
+    __________________________________________________________________________________________________
+    stage2_unit3_relu2 (Activation) (None, 32, 32, 128)  0           stage2_unit3_bn2[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_14 (ZeroPadding2 (None, 34, 34, 128)  0           stage2_unit3_relu2[0][0]         
+    __________________________________________________________________________________________________
+    stage2_unit3_conv2 (Conv2D)     (None, 32, 32, 128)  147456      zero_padding2d_14[0][0]          
+    __________________________________________________________________________________________________
+    add_6 (Add)                     (None, 32, 32, 128)  0           stage2_unit3_conv2[0][0]         
+                                                                     add_5[0][0]                      
+    __________________________________________________________________________________________________
+    stage2_unit4_bn1 (BatchNormaliz (None, 32, 32, 128)  512         add_6[0][0]                      
+    __________________________________________________________________________________________________
+    stage2_unit4_relu1 (Activation) (None, 32, 32, 128)  0           stage2_unit4_bn1[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_15 (ZeroPadding2 (None, 34, 34, 128)  0           stage2_unit4_relu1[0][0]         
+    __________________________________________________________________________________________________
+    stage2_unit4_conv1 (Conv2D)     (None, 32, 32, 128)  147456      zero_padding2d_15[0][0]          
+    __________________________________________________________________________________________________
+    stage2_unit4_bn2 (BatchNormaliz (None, 32, 32, 128)  512         stage2_unit4_conv1[0][0]         
+    __________________________________________________________________________________________________
+    stage2_unit4_relu2 (Activation) (None, 32, 32, 128)  0           stage2_unit4_bn2[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_16 (ZeroPadding2 (None, 34, 34, 128)  0           stage2_unit4_relu2[0][0]         
+    __________________________________________________________________________________________________
+    stage2_unit4_conv2 (Conv2D)     (None, 32, 32, 128)  147456      zero_padding2d_16[0][0]          
+    __________________________________________________________________________________________________
+    add_7 (Add)                     (None, 32, 32, 128)  0           stage2_unit4_conv2[0][0]         
+                                                                     add_6[0][0]                      
+    __________________________________________________________________________________________________
+    stage3_unit1_bn1 (BatchNormaliz (None, 32, 32, 128)  512         add_7[0][0]                      
+    __________________________________________________________________________________________________
+    stage3_unit1_relu1 (Activation) (None, 32, 32, 128)  0           stage3_unit1_bn1[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_17 (ZeroPadding2 (None, 34, 34, 128)  0           stage3_unit1_relu1[0][0]         
+    __________________________________________________________________________________________________
+    stage3_unit1_conv1 (Conv2D)     (None, 16, 16, 256)  294912      zero_padding2d_17[0][0]          
+    __________________________________________________________________________________________________
+    stage3_unit1_bn2 (BatchNormaliz (None, 16, 16, 256)  1024        stage3_unit1_conv1[0][0]         
+    __________________________________________________________________________________________________
+    stage3_unit1_relu2 (Activation) (None, 16, 16, 256)  0           stage3_unit1_bn2[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_18 (ZeroPadding2 (None, 18, 18, 256)  0           stage3_unit1_relu2[0][0]         
+    __________________________________________________________________________________________________
+    stage3_unit1_conv2 (Conv2D)     (None, 16, 16, 256)  589824      zero_padding2d_18[0][0]          
+    __________________________________________________________________________________________________
+    stage3_unit1_sc (Conv2D)        (None, 16, 16, 256)  32768       stage3_unit1_relu1[0][0]         
+    __________________________________________________________________________________________________
+    add_8 (Add)                     (None, 16, 16, 256)  0           stage3_unit1_conv2[0][0]         
+                                                                     stage3_unit1_sc[0][0]            
+    __________________________________________________________________________________________________
+    stage3_unit2_bn1 (BatchNormaliz (None, 16, 16, 256)  1024        add_8[0][0]                      
+    __________________________________________________________________________________________________
+    stage3_unit2_relu1 (Activation) (None, 16, 16, 256)  0           stage3_unit2_bn1[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_19 (ZeroPadding2 (None, 18, 18, 256)  0           stage3_unit2_relu1[0][0]         
+    __________________________________________________________________________________________________
+    stage3_unit2_conv1 (Conv2D)     (None, 16, 16, 256)  589824      zero_padding2d_19[0][0]          
+    __________________________________________________________________________________________________
+    stage3_unit2_bn2 (BatchNormaliz (None, 16, 16, 256)  1024        stage3_unit2_conv1[0][0]         
+    __________________________________________________________________________________________________
+    stage3_unit2_relu2 (Activation) (None, 16, 16, 256)  0           stage3_unit2_bn2[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_20 (ZeroPadding2 (None, 18, 18, 256)  0           stage3_unit2_relu2[0][0]         
+    __________________________________________________________________________________________________
+    stage3_unit2_conv2 (Conv2D)     (None, 16, 16, 256)  589824      zero_padding2d_20[0][0]          
+    __________________________________________________________________________________________________
+    add_9 (Add)                     (None, 16, 16, 256)  0           stage3_unit2_conv2[0][0]         
+                                                                     add_8[0][0]                      
+    __________________________________________________________________________________________________
+    stage3_unit3_bn1 (BatchNormaliz (None, 16, 16, 256)  1024        add_9[0][0]                      
+    __________________________________________________________________________________________________
+    stage3_unit3_relu1 (Activation) (None, 16, 16, 256)  0           stage3_unit3_bn1[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_21 (ZeroPadding2 (None, 18, 18, 256)  0           stage3_unit3_relu1[0][0]         
+    __________________________________________________________________________________________________
+    stage3_unit3_conv1 (Conv2D)     (None, 16, 16, 256)  589824      zero_padding2d_21[0][0]          
+    __________________________________________________________________________________________________
+    stage3_unit3_bn2 (BatchNormaliz (None, 16, 16, 256)  1024        stage3_unit3_conv1[0][0]         
+    __________________________________________________________________________________________________
+    stage3_unit3_relu2 (Activation) (None, 16, 16, 256)  0           stage3_unit3_bn2[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_22 (ZeroPadding2 (None, 18, 18, 256)  0           stage3_unit3_relu2[0][0]         
+    __________________________________________________________________________________________________
+    stage3_unit3_conv2 (Conv2D)     (None, 16, 16, 256)  589824      zero_padding2d_22[0][0]          
+    __________________________________________________________________________________________________
+    add_10 (Add)                    (None, 16, 16, 256)  0           stage3_unit3_conv2[0][0]         
+                                                                     add_9[0][0]                      
+    __________________________________________________________________________________________________
+    stage3_unit4_bn1 (BatchNormaliz (None, 16, 16, 256)  1024        add_10[0][0]                     
+    __________________________________________________________________________________________________
+    stage3_unit4_relu1 (Activation) (None, 16, 16, 256)  0           stage3_unit4_bn1[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_23 (ZeroPadding2 (None, 18, 18, 256)  0           stage3_unit4_relu1[0][0]         
+    __________________________________________________________________________________________________
+    stage3_unit4_conv1 (Conv2D)     (None, 16, 16, 256)  589824      zero_padding2d_23[0][0]          
+    __________________________________________________________________________________________________
+    stage3_unit4_bn2 (BatchNormaliz (None, 16, 16, 256)  1024        stage3_unit4_conv1[0][0]         
+    __________________________________________________________________________________________________
+    stage3_unit4_relu2 (Activation) (None, 16, 16, 256)  0           stage3_unit4_bn2[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_24 (ZeroPadding2 (None, 18, 18, 256)  0           stage3_unit4_relu2[0][0]         
+    __________________________________________________________________________________________________
+    stage3_unit4_conv2 (Conv2D)     (None, 16, 16, 256)  589824      zero_padding2d_24[0][0]          
+    __________________________________________________________________________________________________
+    add_11 (Add)                    (None, 16, 16, 256)  0           stage3_unit4_conv2[0][0]         
+                                                                     add_10[0][0]                     
+    __________________________________________________________________________________________________
+    stage3_unit5_bn1 (BatchNormaliz (None, 16, 16, 256)  1024        add_11[0][0]                     
+    __________________________________________________________________________________________________
+    stage3_unit5_relu1 (Activation) (None, 16, 16, 256)  0           stage3_unit5_bn1[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_25 (ZeroPadding2 (None, 18, 18, 256)  0           stage3_unit5_relu1[0][0]         
+    __________________________________________________________________________________________________
+    stage3_unit5_conv1 (Conv2D)     (None, 16, 16, 256)  589824      zero_padding2d_25[0][0]          
+    __________________________________________________________________________________________________
+    stage3_unit5_bn2 (BatchNormaliz (None, 16, 16, 256)  1024        stage3_unit5_conv1[0][0]         
+    __________________________________________________________________________________________________
+    stage3_unit5_relu2 (Activation) (None, 16, 16, 256)  0           stage3_unit5_bn2[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_26 (ZeroPadding2 (None, 18, 18, 256)  0           stage3_unit5_relu2[0][0]         
+    __________________________________________________________________________________________________
+    stage3_unit5_conv2 (Conv2D)     (None, 16, 16, 256)  589824      zero_padding2d_26[0][0]          
+    __________________________________________________________________________________________________
+    add_12 (Add)                    (None, 16, 16, 256)  0           stage3_unit5_conv2[0][0]         
+                                                                     add_11[0][0]                     
+    __________________________________________________________________________________________________
+    stage3_unit6_bn1 (BatchNormaliz (None, 16, 16, 256)  1024        add_12[0][0]                     
+    __________________________________________________________________________________________________
+    stage3_unit6_relu1 (Activation) (None, 16, 16, 256)  0           stage3_unit6_bn1[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_27 (ZeroPadding2 (None, 18, 18, 256)  0           stage3_unit6_relu1[0][0]         
+    __________________________________________________________________________________________________
+    stage3_unit6_conv1 (Conv2D)     (None, 16, 16, 256)  589824      zero_padding2d_27[0][0]          
+    __________________________________________________________________________________________________
+    stage3_unit6_bn2 (BatchNormaliz (None, 16, 16, 256)  1024        stage3_unit6_conv1[0][0]         
+    __________________________________________________________________________________________________
+    stage3_unit6_relu2 (Activation) (None, 16, 16, 256)  0           stage3_unit6_bn2[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_28 (ZeroPadding2 (None, 18, 18, 256)  0           stage3_unit6_relu2[0][0]         
+    __________________________________________________________________________________________________
+    stage3_unit6_conv2 (Conv2D)     (None, 16, 16, 256)  589824      zero_padding2d_28[0][0]          
+    __________________________________________________________________________________________________
+    add_13 (Add)                    (None, 16, 16, 256)  0           stage3_unit6_conv2[0][0]         
+                                                                     add_12[0][0]                     
+    __________________________________________________________________________________________________
+    stage4_unit1_bn1 (BatchNormaliz (None, 16, 16, 256)  1024        add_13[0][0]                     
+    __________________________________________________________________________________________________
+    stage4_unit1_relu1 (Activation) (None, 16, 16, 256)  0           stage4_unit1_bn1[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_29 (ZeroPadding2 (None, 18, 18, 256)  0           stage4_unit1_relu1[0][0]         
+    __________________________________________________________________________________________________
+    stage4_unit1_conv1 (Conv2D)     (None, 8, 8, 512)    1179648     zero_padding2d_29[0][0]          
+    __________________________________________________________________________________________________
+    stage4_unit1_bn2 (BatchNormaliz (None, 8, 8, 512)    2048        stage4_unit1_conv1[0][0]         
+    __________________________________________________________________________________________________
+    stage4_unit1_relu2 (Activation) (None, 8, 8, 512)    0           stage4_unit1_bn2[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_30 (ZeroPadding2 (None, 10, 10, 512)  0           stage4_unit1_relu2[0][0]         
+    __________________________________________________________________________________________________
+    stage4_unit1_conv2 (Conv2D)     (None, 8, 8, 512)    2359296     zero_padding2d_30[0][0]          
+    __________________________________________________________________________________________________
+    stage4_unit1_sc (Conv2D)        (None, 8, 8, 512)    131072      stage4_unit1_relu1[0][0]         
+    __________________________________________________________________________________________________
+    add_14 (Add)                    (None, 8, 8, 512)    0           stage4_unit1_conv2[0][0]         
+                                                                     stage4_unit1_sc[0][0]            
+    __________________________________________________________________________________________________
+    stage4_unit2_bn1 (BatchNormaliz (None, 8, 8, 512)    2048        add_14[0][0]                     
+    __________________________________________________________________________________________________
+    stage4_unit2_relu1 (Activation) (None, 8, 8, 512)    0           stage4_unit2_bn1[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_31 (ZeroPadding2 (None, 10, 10, 512)  0           stage4_unit2_relu1[0][0]         
+    __________________________________________________________________________________________________
+    stage4_unit2_conv1 (Conv2D)     (None, 8, 8, 512)    2359296     zero_padding2d_31[0][0]          
+    __________________________________________________________________________________________________
+    stage4_unit2_bn2 (BatchNormaliz (None, 8, 8, 512)    2048        stage4_unit2_conv1[0][0]         
+    __________________________________________________________________________________________________
+    stage4_unit2_relu2 (Activation) (None, 8, 8, 512)    0           stage4_unit2_bn2[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_32 (ZeroPadding2 (None, 10, 10, 512)  0           stage4_unit2_relu2[0][0]         
+    __________________________________________________________________________________________________
+    stage4_unit2_conv2 (Conv2D)     (None, 8, 8, 512)    2359296     zero_padding2d_32[0][0]          
+    __________________________________________________________________________________________________
+    add_15 (Add)                    (None, 8, 8, 512)    0           stage4_unit2_conv2[0][0]         
+                                                                     add_14[0][0]                     
+    __________________________________________________________________________________________________
+    stage4_unit3_bn1 (BatchNormaliz (None, 8, 8, 512)    2048        add_15[0][0]                     
+    __________________________________________________________________________________________________
+    stage4_unit3_relu1 (Activation) (None, 8, 8, 512)    0           stage4_unit3_bn1[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_33 (ZeroPadding2 (None, 10, 10, 512)  0           stage4_unit3_relu1[0][0]         
+    __________________________________________________________________________________________________
+    stage4_unit3_conv1 (Conv2D)     (None, 8, 8, 512)    2359296     zero_padding2d_33[0][0]          
+    __________________________________________________________________________________________________
+    stage4_unit3_bn2 (BatchNormaliz (None, 8, 8, 512)    2048        stage4_unit3_conv1[0][0]         
+    __________________________________________________________________________________________________
+    stage4_unit3_relu2 (Activation) (None, 8, 8, 512)    0           stage4_unit3_bn2[0][0]           
+    __________________________________________________________________________________________________
+    zero_padding2d_34 (ZeroPadding2 (None, 10, 10, 512)  0           stage4_unit3_relu2[0][0]         
+    __________________________________________________________________________________________________
+    stage4_unit3_conv2 (Conv2D)     (None, 8, 8, 512)    2359296     zero_padding2d_34[0][0]          
+    __________________________________________________________________________________________________
+    add_16 (Add)                    (None, 8, 8, 512)    0           stage4_unit3_conv2[0][0]         
+                                                                     add_15[0][0]                     
+    __________________________________________________________________________________________________
+    bn1 (BatchNormalization)        (None, 8, 8, 512)    2048        add_16[0][0]                     
+    __________________________________________________________________________________________________
+    relu1 (Activation)              (None, 8, 8, 512)    0           bn1[0][0]                        
+    __________________________________________________________________________________________________
+    decoder_stage0_upsampling (UpSa (None, 16, 16, 512)  0           relu1[0][0]                      
+    __________________________________________________________________________________________________
+    decoder_stage0_concat (Concaten (None, 16, 16, 768)  0           decoder_stage0_upsampling[0][0]  
+                                                                     stage4_unit1_relu1[0][0]         
+    __________________________________________________________________________________________________
+    decoder_stage0a_conv (Conv2D)   (None, 16, 16, 256)  1769472     decoder_stage0_concat[0][0]      
+    __________________________________________________________________________________________________
+    decoder_stage0a_bn (BatchNormal (None, 16, 16, 256)  1024        decoder_stage0a_conv[0][0]       
+    __________________________________________________________________________________________________
+    decoder_stage0a_relu (Activatio (None, 16, 16, 256)  0           decoder_stage0a_bn[0][0]         
+    __________________________________________________________________________________________________
+    decoder_stage0b_conv (Conv2D)   (None, 16, 16, 256)  589824      decoder_stage0a_relu[0][0]       
+    __________________________________________________________________________________________________
+    decoder_stage0b_bn (BatchNormal (None, 16, 16, 256)  1024        decoder_stage0b_conv[0][0]       
+    __________________________________________________________________________________________________
+    decoder_stage0b_relu (Activatio (None, 16, 16, 256)  0           decoder_stage0b_bn[0][0]         
+    __________________________________________________________________________________________________
+    decoder_stage1_upsampling (UpSa (None, 32, 32, 256)  0           decoder_stage0b_relu[0][0]       
+    __________________________________________________________________________________________________
+    decoder_stage1_concat (Concaten (None, 32, 32, 384)  0           decoder_stage1_upsampling[0][0]  
+                                                                     stage3_unit1_relu1[0][0]         
+    __________________________________________________________________________________________________
+    decoder_stage1a_conv (Conv2D)   (None, 32, 32, 128)  442368      decoder_stage1_concat[0][0]      
+    __________________________________________________________________________________________________
+    decoder_stage1a_bn (BatchNormal (None, 32, 32, 128)  512         decoder_stage1a_conv[0][0]       
+    __________________________________________________________________________________________________
+    decoder_stage1a_relu (Activatio (None, 32, 32, 128)  0           decoder_stage1a_bn[0][0]         
+    __________________________________________________________________________________________________
+    decoder_stage1b_conv (Conv2D)   (None, 32, 32, 128)  147456      decoder_stage1a_relu[0][0]       
+    __________________________________________________________________________________________________
+    decoder_stage1b_bn (BatchNormal (None, 32, 32, 128)  512         decoder_stage1b_conv[0][0]       
+    __________________________________________________________________________________________________
+    decoder_stage1b_relu (Activatio (None, 32, 32, 128)  0           decoder_stage1b_bn[0][0]         
+    __________________________________________________________________________________________________
+    decoder_stage2_upsampling (UpSa (None, 64, 64, 128)  0           decoder_stage1b_relu[0][0]       
+    __________________________________________________________________________________________________
+    decoder_stage2_concat (Concaten (None, 64, 64, 192)  0           decoder_stage2_upsampling[0][0]  
+                                                                     stage2_unit1_relu1[0][0]         
+    __________________________________________________________________________________________________
+    decoder_stage2a_conv (Conv2D)   (None, 64, 64, 64)   110592      decoder_stage2_concat[0][0]      
+    __________________________________________________________________________________________________
+    decoder_stage2a_bn (BatchNormal (None, 64, 64, 64)   256         decoder_stage2a_conv[0][0]       
+    __________________________________________________________________________________________________
+    decoder_stage2a_relu (Activatio (None, 64, 64, 64)   0           decoder_stage2a_bn[0][0]         
+    __________________________________________________________________________________________________
+    decoder_stage2b_conv (Conv2D)   (None, 64, 64, 64)   36864       decoder_stage2a_relu[0][0]       
+    __________________________________________________________________________________________________
+    decoder_stage2b_bn (BatchNormal (None, 64, 64, 64)   256         decoder_stage2b_conv[0][0]       
+    __________________________________________________________________________________________________
+    decoder_stage2b_relu (Activatio (None, 64, 64, 64)   0           decoder_stage2b_bn[0][0]         
+    __________________________________________________________________________________________________
+    decoder_stage3_upsampling (UpSa (None, 128, 128, 64) 0           decoder_stage2b_relu[0][0]       
+    __________________________________________________________________________________________________
+    decoder_stage3_concat (Concaten (None, 128, 128, 128 0           decoder_stage3_upsampling[0][0]  
+                                                                     relu0[0][0]                      
+    __________________________________________________________________________________________________
+    decoder_stage3a_conv (Conv2D)   (None, 128, 128, 32) 36864       decoder_stage3_concat[0][0]      
+    __________________________________________________________________________________________________
+    decoder_stage3a_bn (BatchNormal (None, 128, 128, 32) 128         decoder_stage3a_conv[0][0]       
+    __________________________________________________________________________________________________
+    decoder_stage3a_relu (Activatio (None, 128, 128, 32) 0           decoder_stage3a_bn[0][0]         
+    __________________________________________________________________________________________________
+    decoder_stage3b_conv (Conv2D)   (None, 128, 128, 32) 9216        decoder_stage3a_relu[0][0]       
+    __________________________________________________________________________________________________
+    decoder_stage3b_bn (BatchNormal (None, 128, 128, 32) 128         decoder_stage3b_conv[0][0]       
+    __________________________________________________________________________________________________
+    decoder_stage3b_relu (Activatio (None, 128, 128, 32) 0           decoder_stage3b_bn[0][0]         
+    __________________________________________________________________________________________________
+    decoder_stage4_upsampling (UpSa (None, 256, 256, 32) 0           decoder_stage3b_relu[0][0]       
+    __________________________________________________________________________________________________
+    decoder_stage4a_conv (Conv2D)   (None, 256, 256, 16) 4608        decoder_stage4_upsampling[0][0]  
+    __________________________________________________________________________________________________
+    decoder_stage4a_bn (BatchNormal (None, 256, 256, 16) 64          decoder_stage4a_conv[0][0]       
+    __________________________________________________________________________________________________
+    decoder_stage4a_relu (Activatio (None, 256, 256, 16) 0           decoder_stage4a_bn[0][0]         
+    __________________________________________________________________________________________________
+    decoder_stage4b_conv (Conv2D)   (None, 256, 256, 16) 2304        decoder_stage4a_relu[0][0]       
+    __________________________________________________________________________________________________
+    decoder_stage4b_bn (BatchNormal (None, 256, 256, 16) 64          decoder_stage4b_conv[0][0]       
+    __________________________________________________________________________________________________
+    decoder_stage4b_relu (Activatio (None, 256, 256, 16) 0           decoder_stage4b_bn[0][0]         
+    __________________________________________________________________________________________________
+    final_conv (Conv2D)             (None, 256, 256, 1)  145         decoder_stage4b_relu[0][0]       
+    __________________________________________________________________________________________________
+    sigmoid (Activation)            (None, 256, 256, 1)  0           final_conv[0][0]                 
+    ==================================================================================================
+    Total params: 24,456,154
+    Trainable params: 24,438,804
+    Non-trainable params: 17,350
+    __________________________________________________________________________________________________
+
+
 
 ```python
-model.fit_generator(train_generator, 
-                    steps_per_epoch=num_train / batch_size, 
-                    epochs=100, 
-                    validation_data=val_generator, 
-                    validation_steps=num_val / batch_size)
+callbacks = [
+    keras.callbacks.ModelCheckpoint("./best-unet.h5", 
+        save_weights_only=True, 
+        save_best_only=True, 
+        mode="min"
+    ), 
+    keras.callbacks.ReduceLROnPlateau()
+]
 
-model.save_weights("unet-100.h5")
+train_iter = train_generator.iterator(batch_size, True)
+val_iter = val_generator.iterator(batch_size, True)
 ```
 
+Train the model for 30 eopchs and save weights.
+
+
 ```python
-model.evaluate_generator(val_generator, 
-                         steps=num_val / batch_size)
+history = model.fit_generator(
+    train_iter, 
+    steps_per_epoch=len(train_generator) / batch_size, 
+    epochs=30, 
+    callbacks=callbacks, 
+    validation_data=val_iter, 
+    validation_steps=len(val_generator) / batch_size
+)
+
+model.save_weights("./last-unet.h5")
 ```
 
-Read test images.
+    Epoch 1/30
+    500/500 [==============================] - 434s 869ms/step - loss: 0.7582 - iou_score: 0.4783 - val_loss: 0.5042 - val_iou_score: 0.6138
+    Epoch 2/30
+    500/500 [==============================] - 403s 806ms/step - loss: 0.4976 - iou_score: 0.6573 - val_loss: 0.3992 - val_iou_score: 0.6649
+    Epoch 3/30
+    500/500 [==============================] - 403s 806ms/step - loss: 0.4123 - iou_score: 0.7188 - val_loss: 0.3676 - val_iou_score: 0.6581
+    Epoch 4/30
+    500/500 [==============================] - 403s 807ms/step - loss: 0.3586 - iou_score: 0.7568 - val_loss: 0.6342 - val_iou_score: 0.6941
+    Epoch 5/30
+    500/500 [==============================] - 403s 806ms/step - loss: 0.3263 - iou_score: 0.7792 - val_loss: 0.3165 - val_iou_score: 0.7061
+    Epoch 6/30
+    500/500 [==============================] - 403s 806ms/step - loss: 0.3012 - iou_score: 0.7964 - val_loss: 0.4542 - val_iou_score: 0.7062
+    Epoch 7/30
+    500/500 [==============================] - 403s 806ms/step - loss: 0.2741 - iou_score: 0.8145 - val_loss: 0.4757 - val_iou_score: 0.7075
+    Epoch 8/30
+    500/500 [==============================] - 403s 806ms/step - loss: 0.2599 - iou_score: 0.8242 - val_loss: 0.6141 - val_iou_score: 0.7081
+    Epoch 9/30
+    500/500 [==============================] - 403s 805ms/step - loss: 0.2598 - iou_score: 0.8246 - val_loss: 0.3431 - val_iou_score: 0.7099
+    Epoch 10/30
+    500/500 [==============================] - 402s 805ms/step - loss: 0.2441 - iou_score: 0.8349 - val_loss: 0.7311 - val_iou_score: 0.7203
+    Epoch 11/30
+    500/500 [==============================] - 402s 803ms/step - loss: 0.2446 - iou_score: 0.8344 - val_loss: 0.3612 - val_iou_score: 0.7164
+    Epoch 12/30
+    500/500 [==============================] - 403s 805ms/step - loss: 0.2327 - iou_score: 0.8421 - val_loss: 0.4800 - val_iou_score: 0.7245
+    Epoch 13/30
+    500/500 [==============================] - 403s 806ms/step - loss: 0.2158 - iou_score: 0.8532 - val_loss: 0.5245 - val_iou_score: 0.7201
+    Epoch 14/30
+    500/500 [==============================] - 403s 806ms/step - loss: 0.2145 - iou_score: 0.8541 - val_loss: 0.4661 - val_iou_score: 0.7093
+    Epoch 15/30
+    500/500 [==============================] - 403s 807ms/step - loss: 0.2038 - iou_score: 0.8613 - val_loss: 0.9280 - val_iou_score: 0.7032
+    Epoch 16/30
+    500/500 [==============================] - 403s 807ms/step - loss: 0.1930 - iou_score: 0.8678 - val_loss: 0.4871 - val_iou_score: 0.7233
+    Epoch 17/30
+    500/500 [==============================] - 403s 807ms/step - loss: 0.1816 - iou_score: 0.8756 - val_loss: 0.4946 - val_iou_score: 0.7266
+    Epoch 18/30
+    500/500 [==============================] - 403s 806ms/step - loss: 0.1771 - iou_score: 0.8785 - val_loss: 0.2848 - val_iou_score: 0.7263
+    Epoch 19/30
+    500/500 [==============================] - 404s 808ms/step - loss: 0.1736 - iou_score: 0.8809 - val_loss: 0.5319 - val_iou_score: 0.7280
+    Epoch 20/30
+    500/500 [==============================] - 404s 807ms/step - loss: 0.1700 - iou_score: 0.8834 - val_loss: 0.4135 - val_iou_score: 0.7244
+    Epoch 21/30
+    500/500 [==============================] - 405s 809ms/step - loss: 0.1669 - iou_score: 0.8853 - val_loss: 0.5183 - val_iou_score: 0.7261
+    Epoch 22/30
+    500/500 [==============================] - 405s 809ms/step - loss: 0.1646 - iou_score: 0.8869 - val_loss: 0.3134 - val_iou_score: 0.7263
+    Epoch 23/30
+    500/500 [==============================] - 404s 809ms/step - loss: 0.1617 - iou_score: 0.8889 - val_loss: 0.4760 - val_iou_score: 0.7285
+    Epoch 24/30
+    500/500 [==============================] - 404s 807ms/step - loss: 0.1592 - iou_score: 0.8905 - val_loss: 0.3940 - val_iou_score: 0.7257
+    Epoch 25/30
+    500/500 [==============================] - 404s 808ms/step - loss: 0.1566 - iou_score: 0.8921 - val_loss: 0.4871 - val_iou_score: 0.7266
+    Epoch 26/30
+    500/500 [==============================] - 404s 808ms/step - loss: 0.1550 - iou_score: 0.8929 - val_loss: 0.4682 - val_iou_score: 0.7291
+    Epoch 27/30
+    500/500 [==============================] - 404s 808ms/step - loss: 0.1526 - iou_score: 0.8945 - val_loss: 0.3007 - val_iou_score: 0.7245
+    Epoch 28/30
+    500/500 [==============================] - 404s 808ms/step - loss: 0.1502 - iou_score: 0.8961 - val_loss: 0.4147 - val_iou_score: 0.7276
+    Epoch 29/30
+    500/500 [==============================] - 405s 809ms/step - loss: 0.1478 - iou_score: 0.8974 - val_loss: 0.5858 - val_iou_score: 0.7245
+    Epoch 30/30
+    500/500 [==============================] - 405s 809ms/step - loss: 0.1473 - iou_score: 0.8978 - val_loss: 0.4658 - val_iou_score: 0.7224
+
+
 
 ```python
-import cv2
+val_loss, val_iou_score = model.evaluate_generator(
+    val_iter, 
+    steps=n_val / batch_size
+)
+print(f"val_loss: {val_loss:1.4f} - val_iou_score: {val_iou_score:1.4f}")
+```
 
-def frame_generator(frames_path, img_shape):
-    
-    frames_path = glob.glob(join(frames_path, "*.jpg"))
-    np.random.shuffle(frames_path)
-    
-    i = 0
-    while True:
-        
-        if i == len(frames_path):
-            i = 0
-        
-        frame = cv2.imread(frames_path[i])
-        frame = cv2.resize(frame, img_shape)
-        yield frame
-        i += 1
+    val_loss: 0.5810 - val_iou_score: 0.7222
 
-test_generator = frame_generator("frames/test", img_shape)
+
+Visualize training history
+
+
+```python
+# plot training and validation iou_score values
+plt.figure(figsize=(10, 5))
+plt.subplot(1, 2, 1)
+plt.plot(history.history['iou_score'])
+plt.plot(history.history['val_iou_score'])
+plt.title('Model iou_score')
+plt.ylabel('iou_score')
+plt.xlabel('Epoch')
+plt.legend(['Train', 'Val'], loc='upper left')
+
+# Plot training and validation loss values
+plt.subplot(1, 2, 2)
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.title('Model loss')
+plt.ylabel('Loss')
+plt.xlabel('Epoch')
+plt.legend(['Train', 'Val'], loc='upper left')
+plt.show()
+```
+
+
+![png](img/output_37_0.png)
+
+
+Read only frames from test dataset.
+
+
+```python
+n_test = 1000
+n_show = 3
+
+# there is no annotations for test dataset, 
+# so we split val dataset into validation and test
+test_generator = generator(
+    val_frames_path, 
+    val_masks_path, 
+    img_shape, 
+    n_test, 
+    n_val
+)
+test_iter = test_generator.iterator(n_show, True)
 ```
 
 Visualize results with matplotlib.
 
+
 ```python
-import matplotlib.pyplot as plt
+frames, _ = next(test_iter)
+frames = frames.astype(np.int32)
+res = model.predict(frames)
 
-frame = next(test_generator)
-res = model.predict(np.array([frame]))[0]
+n_show = 3
+plt.figure(figsize=(10, 5 * n_show))
 
-plt.figure(figsize=(10, 10))
+for i in range(n_show):
 
-ax = plt.subplot(1, 2, 1)
-# cv2 read image in BGR mode
-plt.imshow(frame[:,:,::-1])
+    frame = frames[i][:,:,::-1]
+    
+    plt.subplot(n_show, 2, i * 2 + 1)
+    plt.imshow(frame)
+    
+    plt.xticks([])
+    plt.yticks([])
 
-# convert mask into three-chennel image
-res = np.repeat(res, 3, axis=2)
-# set average value as treshold to cut off the foreground
-np.putmask(frame, res < np.average(res), frame * 0)
+    # convert mask into three-chennel image
+    mask = np.repeat(res[i], 3, axis=2)
+    # set average value as treshold to cut off the foreground
+    frame[mask < 0.5] *= 0
 
-ax = plt.subplot(1, 2, 2)
-plt.imshow(frame[:,:,::-1])
+    plt.subplot(n_show, 2, i * 2 + 2)
+    plt.imshow(frame)
+    
+    plt.xticks([])
+    plt.yticks([])
+    
+plt.show()
 ```
+
+
+![png](img/output_41_0.png)
