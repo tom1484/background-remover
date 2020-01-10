@@ -293,8 +293,6 @@ import keras
 ```
 
     Using TensorFlow backend.
-    
-
     Segmentation Models: using `keras` framework.
 
 
