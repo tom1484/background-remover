@@ -41,15 +41,6 @@ U-Net solve this problem in a clever way. <br>
 
 It add outputs from encoder to layers of decoder directly, so the decoder can use more details.
 
-### Linknet
-
-Linknet consists of several encoders and decoders. <br>
-Skip connections directly pass details from encoders to encoders. <br>
-
-<img src="https://www.researchgate.net/publication/323570662/figure/fig2/AS:601018588991488@1520305406425/Fig-These-segmentation-networks-are-based-on-encoder-decoder-network-of-U-Net-family.png" width="80%">
-
-More details on GitHub: [Linknet](https://github.com/e-lab/LinkNet)
-
 ## Prepare Dataset
 
 Before building model, we should prepare our data first. <br>
@@ -142,13 +133,6 @@ for imgId in data.getImgIds():
 ```
 
 
-```python
-!ls -l data/frames/train | wc -l
-```
-
-    64116
-
-
 ## Build Model
 
 In this example, we'll use 8000 samples for training, 1600 for validation.
@@ -175,16 +159,13 @@ import numpy as np
 # this handles all requests for data
 class generator:
     
-    def __init__(self, frames_dir, masks_dir, img_shape, n_data=None, start=0):
+    def __init__(self, frames_dir, masks_dir, img_shape, n_data=None):
         
         frames_path = glob.glob(join(frames_dir, "*.jpg"))
         self.frames_path = sorted(frames_path, key=lambda path: int(path.split('/')[-1].split('.')[0]))
         
-        if masks_dir is None:
-            self.masks_path = [""] * len(frames_path)
-        else:
-            masks_path = glob.glob(join(masks_dir, "*.jpg"))
-            self.masks_path = sorted(masks_path, key=lambda path: int(path.split('/')[-1].split('.')[0]))
+        masks_path = glob.glob(join(masks_dir, "*.jpg"))
+        self.masks_path = sorted(masks_path, key=lambda path: int(path.split('/')[-1].split('.')[0]))
         
         # use all samples
         if n_data is None:
@@ -193,7 +174,7 @@ class generator:
         
         self.img_shape = img_shape
         # used for shuffling
-        self.order = np.arange(n_data) + start
+        self.order = np.arange(n_data)
         
     def __getitem__(self, key):
         
@@ -220,9 +201,7 @@ class generator:
     def get_data(self, frame_path, mask_path):
         
         frame = cv2.imread(frame_path).astype(np.float32)
-        mask = cv2.imread(mask_path)
-        if mask is not None:
-            mask = mask.astype(np.float32)[:,:,:1]
+        mask = cv2.imread(mask_path).astype(np.float32)[:,:,:1]
         
         return frame, mask
     
@@ -248,20 +227,20 @@ class generator:
 
 
 ```python
-train_frames_path = "data-256/frames/train"
-train_masks_path = "data-256/masks/train"
+train_frames_dir = "data/frames/train"
+train_masks_dir = "data/masks/train"
 train_generator = generator(
-    train_frames_path, 
-    train_masks_path, 
+    train_frames_dir, 
+    train_masks_dir, 
     img_shape, 
     n_train
 )
 
-val_frames_path = "data-256/frames/val"
-val_masks_path = "data-256/masks/val"
+val_frames_dir = "data/frames/val"
+val_masks_dir = "data/masks/val"
 val_generator = generator(
-    val_frames_path, 
-    val_masks_path, 
+    val_frames_dir, 
+    val_masks_dir, 
     img_shape, 
     n_val
 )
@@ -276,30 +255,32 @@ import matplotlib.pyplot as plt
 
 
 ```python
-frame, mask = train_generator[0]
-frame = frame.astype(np.int32)
-mask = mask.astype(np.int32)
+n_show = 3
+plt.figure(figsize=(10, 5 * n_show))
 
-plt.figure(figsize=(10, 5))
+for i in range(n_show):
+    frame, mask = train_generator[i]
+    frame = frame.astype(np.int32)
+    mask = mask.astype(np.int32)
 
-plt.subplot(1, 2, 1)
-# cv2 read image in BGR mode
-plt.imshow(frame[:,:,::-1])
+    plt.subplot(1 * n_show , 2, i * 2 + 1)
+    # cv2 read image in BGR mode
+    plt.imshow(frame[:,:,::-1])
 
-plt.xticks([])
-plt.yticks([])
+    plt.xticks([])
+    plt.yticks([])
 
-plt.subplot(1, 2, 2)
-plt.imshow(mask[:,:,0])
+    plt.subplot(n_show, 2, i * 2 + 2)
+    plt.imshow(mask[:,:,0])
 
-plt.xticks([])
-plt.yticks([])
+    plt.xticks([])
+    plt.yticks([])
 
 plt.show()
 ```
 
 
-![png](img/output_29_0.png)
+![png](img/output_12_0.png)
 
 
 segmentation-models is an library that provides several models for image segmentation. <br>
@@ -309,7 +290,15 @@ You can see more details on [github](https://github.com/qubvel/segmentation_mode
 ```python
 import segmentation_models as sm
 import keras
+```
 
+    Using TensorFlow backend.
+    
+
+    Segmentation Models: using `keras` framework.
+
+
+```python
 model = sm.Unet("resnet34", input_shape=img_shape + (3, ))
 
 optimizer = keras.optimizers.Adam(1e-4)
@@ -318,9 +307,6 @@ metrics = [sm.metrics.iou_score]
 
 model.compile(optimizer, loss,  metrics)
 ```
-
-    Using TensorFlow backend.
-
 
     Segmentation Models: using `keras` framework.
     WARNING:tensorflow:From /home/tom2003611/.local/lib/python3.7/site-packages/tensorflow/python/ops/nn_impl.py:182: add_dispatch_support.<locals>.wrapper (from tensorflow.python.ops.array_ops) is deprecated and will be removed in a future version.
@@ -349,7 +335,7 @@ Train the model for 30 eopchs and save weights.
 history = model.fit_generator(
     train_iter, 
     steps_per_epoch=len(train_generator) / batch_size, 
-    epochs=30, 
+    epochs=15, 
     callbacks=callbacks, 
     validation_data=val_iter, 
     validation_steps=len(val_generator) / batch_size
@@ -358,66 +344,36 @@ history = model.fit_generator(
 model.save_weights("./last-unet.h5")
 ```
 
-    Epoch 1/30
-    500/500 [==============================] - 434s 869ms/step - loss: 0.7582 - iou_score: 0.4783 - val_loss: 0.5042 - val_iou_score: 0.6138
-    Epoch 2/30
-    500/500 [==============================] - 403s 806ms/step - loss: 0.4976 - iou_score: 0.6573 - val_loss: 0.3992 - val_iou_score: 0.6649
-    Epoch 3/30
-    500/500 [==============================] - 403s 806ms/step - loss: 0.4123 - iou_score: 0.7188 - val_loss: 0.3676 - val_iou_score: 0.6581
-    Epoch 4/30
-    500/500 [==============================] - 403s 807ms/step - loss: 0.3586 - iou_score: 0.7568 - val_loss: 0.6342 - val_iou_score: 0.6941
-    Epoch 5/30
-    500/500 [==============================] - 403s 806ms/step - loss: 0.3263 - iou_score: 0.7792 - val_loss: 0.3165 - val_iou_score: 0.7061
-    Epoch 6/30
-    500/500 [==============================] - 403s 806ms/step - loss: 0.3012 - iou_score: 0.7964 - val_loss: 0.4542 - val_iou_score: 0.7062
-    Epoch 7/30
-    500/500 [==============================] - 403s 806ms/step - loss: 0.2741 - iou_score: 0.8145 - val_loss: 0.4757 - val_iou_score: 0.7075
-    Epoch 8/30
-    500/500 [==============================] - 403s 806ms/step - loss: 0.2599 - iou_score: 0.8242 - val_loss: 0.6141 - val_iou_score: 0.7081
-    Epoch 9/30
-    500/500 [==============================] - 403s 805ms/step - loss: 0.2598 - iou_score: 0.8246 - val_loss: 0.3431 - val_iou_score: 0.7099
-    Epoch 10/30
-    500/500 [==============================] - 402s 805ms/step - loss: 0.2441 - iou_score: 0.8349 - val_loss: 0.7311 - val_iou_score: 0.7203
-    Epoch 11/30
-    500/500 [==============================] - 402s 803ms/step - loss: 0.2446 - iou_score: 0.8344 - val_loss: 0.3612 - val_iou_score: 0.7164
-    Epoch 12/30
-    500/500 [==============================] - 403s 805ms/step - loss: 0.2327 - iou_score: 0.8421 - val_loss: 0.4800 - val_iou_score: 0.7245
-    Epoch 13/30
-    500/500 [==============================] - 403s 806ms/step - loss: 0.2158 - iou_score: 0.8532 - val_loss: 0.5245 - val_iou_score: 0.7201
-    Epoch 14/30
-    500/500 [==============================] - 403s 806ms/step - loss: 0.2145 - iou_score: 0.8541 - val_loss: 0.4661 - val_iou_score: 0.7093
-    Epoch 15/30
-    500/500 [==============================] - 403s 807ms/step - loss: 0.2038 - iou_score: 0.8613 - val_loss: 0.9280 - val_iou_score: 0.7032
-    Epoch 16/30
-    500/500 [==============================] - 403s 807ms/step - loss: 0.1930 - iou_score: 0.8678 - val_loss: 0.4871 - val_iou_score: 0.7233
-    Epoch 17/30
-    500/500 [==============================] - 403s 807ms/step - loss: 0.1816 - iou_score: 0.8756 - val_loss: 0.4946 - val_iou_score: 0.7266
-    Epoch 18/30
-    500/500 [==============================] - 403s 806ms/step - loss: 0.1771 - iou_score: 0.8785 - val_loss: 0.2848 - val_iou_score: 0.7263
-    Epoch 19/30
-    500/500 [==============================] - 404s 808ms/step - loss: 0.1736 - iou_score: 0.8809 - val_loss: 0.5319 - val_iou_score: 0.7280
-    Epoch 20/30
-    500/500 [==============================] - 404s 807ms/step - loss: 0.1700 - iou_score: 0.8834 - val_loss: 0.4135 - val_iou_score: 0.7244
-    Epoch 21/30
-    500/500 [==============================] - 405s 809ms/step - loss: 0.1669 - iou_score: 0.8853 - val_loss: 0.5183 - val_iou_score: 0.7261
-    Epoch 22/30
-    500/500 [==============================] - 405s 809ms/step - loss: 0.1646 - iou_score: 0.8869 - val_loss: 0.3134 - val_iou_score: 0.7263
-    Epoch 23/30
-    500/500 [==============================] - 404s 809ms/step - loss: 0.1617 - iou_score: 0.8889 - val_loss: 0.4760 - val_iou_score: 0.7285
-    Epoch 24/30
-    500/500 [==============================] - 404s 807ms/step - loss: 0.1592 - iou_score: 0.8905 - val_loss: 0.3940 - val_iou_score: 0.7257
-    Epoch 25/30
-    500/500 [==============================] - 404s 808ms/step - loss: 0.1566 - iou_score: 0.8921 - val_loss: 0.4871 - val_iou_score: 0.7266
-    Epoch 26/30
-    500/500 [==============================] - 404s 808ms/step - loss: 0.1550 - iou_score: 0.8929 - val_loss: 0.4682 - val_iou_score: 0.7291
-    Epoch 27/30
-    500/500 [==============================] - 404s 808ms/step - loss: 0.1526 - iou_score: 0.8945 - val_loss: 0.3007 - val_iou_score: 0.7245
-    Epoch 28/30
-    500/500 [==============================] - 404s 808ms/step - loss: 0.1502 - iou_score: 0.8961 - val_loss: 0.4147 - val_iou_score: 0.7276
-    Epoch 29/30
-    500/500 [==============================] - 405s 809ms/step - loss: 0.1478 - iou_score: 0.8974 - val_loss: 0.5858 - val_iou_score: 0.7245
-    Epoch 30/30
-    500/500 [==============================] - 405s 809ms/step - loss: 0.1473 - iou_score: 0.8978 - val_loss: 0.4658 - val_iou_score: 0.7224
+    Epoch 1/15
+    500/500 [==============================] - 437s 874ms/step - loss: 0.8917 - iou_score: 0.4048 - val_loss: 0.7412 - val_iou_score: 0.5466
+    Epoch 2/15
+    500/500 [==============================] - 410s 821ms/step - loss: 0.5389 - iou_score: 0.6208 - val_loss: 0.6543 - val_iou_score: 0.6321
+    Epoch 3/15
+    500/500 [==============================] - 410s 820ms/step - loss: 0.4219 - iou_score: 0.7079 - val_loss: 0.5404 - val_iou_score: 0.6829
+    Epoch 4/15
+    500/500 [==============================] - 410s 819ms/step - loss: 0.3619 - iou_score: 0.7521 - val_loss: 0.3905 - val_iou_score: 0.6793
+    Epoch 5/15
+    500/500 [==============================] - 410s 819ms/step - loss: 0.3240 - iou_score: 0.7799 - val_loss: 0.3069 - val_iou_score: 0.6950
+    Epoch 6/15
+    500/500 [==============================] - 410s 821ms/step - loss: 0.3004 - iou_score: 0.7960 - val_loss: 0.8698 - val_iou_score: 0.7091
+    Epoch 7/15
+    500/500 [==============================] - 409s 819ms/step - loss: 0.2794 - iou_score: 0.8104 - val_loss: 0.5085 - val_iou_score: 0.7112
+    Epoch 8/15
+    500/500 [==============================] - 409s 818ms/step - loss: 0.2667 - iou_score: 0.8195 - val_loss: 0.7393 - val_iou_score: 0.6895
+    Epoch 9/15
+    500/500 [==============================] - 410s 819ms/step - loss: 0.2601 - iou_score: 0.8241 - val_loss: 0.3658 - val_iou_score: 0.7148
+    Epoch 10/15
+    500/500 [==============================] - 409s 819ms/step - loss: 0.2490 - iou_score: 0.8314 - val_loss: 0.5197 - val_iou_score: 0.7143
+    Epoch 11/15
+    500/500 [==============================] - 409s 818ms/step - loss: 0.2455 - iou_score: 0.8337 - val_loss: 0.9073 - val_iou_score: 0.7116
+    Epoch 12/15
+    500/500 [==============================] - 410s 820ms/step - loss: 0.2259 - iou_score: 0.8464 - val_loss: 0.6576 - val_iou_score: 0.7282
+    Epoch 13/15
+    500/500 [==============================] - 410s 819ms/step - loss: 0.2139 - iou_score: 0.8543 - val_loss: 0.3263 - val_iou_score: 0.7192
+    Epoch 14/15
+    500/500 [==============================] - 409s 818ms/step - loss: 0.2073 - iou_score: 0.8589 - val_loss: 0.5328 - val_iou_score: 0.7205
+    Epoch 15/15
+    500/500 [==============================] - 410s 820ms/step - loss: 0.2062 - iou_score: 0.8593 - val_loss: 0.5227 - val_iou_score: 0.7116
 
 
 
@@ -429,7 +385,7 @@ val_loss, val_iou_score = model.evaluate_generator(
 print(f"val_loss: {val_loss:1.4f} - val_iou_score: {val_iou_score:1.4f}")
 ```
 
-    val_loss: 0.5810 - val_iou_score: 0.7222
+    val_loss: 0.4521 - val_iou_score: 0.7141
 
 
 Visualize training history
@@ -458,56 +414,86 @@ plt.show()
 ```
 
 
-![png](img/output_37_0.png)
+![png](img/output_18_0.png)
 
 
-Read only frames from test dataset.
+Load the best weights.
 
 
 ```python
-n_test = 1000
-n_show = 3
+model = sm.Unet("resnet34", input_shape=img_shape + (3, ))
 
-# there is no annotations for test dataset, 
-# so we split val dataset into validation and test
-test_generator = generator(
-    val_frames_path, 
-    val_masks_path, 
-    img_shape, 
-    n_test, 
-    n_val
-)
-test_iter = test_generator.iterator(n_show, True)
+optimizer = keras.optimizers.Adam(1e-4)
+loss = sm.losses.bce_jaccard_loss
+metrics = [sm.metrics.iou_score]
+
+model.compile(optimizer, loss,  metrics)
+model.load_weights("best-unet.h5")
 ```
+
+
+Write predictions into results
+
+
+```python
+results_source_dir = "data/results/source"
+results_dir = "data/results"
+
+results_source_path = glob.glob(join(results_source_dir, "*.jpg"))
+n_test = len(results_source_path)
+```
+
+
+```python
+frames = []
+for path in results_source_path:   
+    
+    frames.append(cv2.imread(path))
+
+frames = np.array(frames)
+predicts = model.predict(frames)
+
+for i in range(n_test):
+    
+    name = results_source_path[i].split("/")[-1]
+    
+    mask = np.repeat(predicts[i], 3, axis=2)
+    frames[i][mask < np.average(mask)] = 0
+    
+    cv2.imwrite(
+        join("data/results", name), 
+        frames[i]
+    )
+```
+
 
 Visualize results with matplotlib.
 
 
 ```python
-frames, _ = next(test_iter)
-frames = frames.astype(np.int32)
-res = model.predict(frames)
-
 n_show = 3
 plt.figure(figsize=(10, 5 * n_show))
 
 for i in range(n_show):
+    
+    idx = order[i]
 
-    frame = frames[i][:,:,::-1]
+    source = cv2.imread(
+        results_source_path[idx]
+    )
     
     plt.subplot(n_show, 2, i * 2 + 1)
-    plt.imshow(frame)
+    plt.imshow(source[:,:,::-1])
     
     plt.xticks([])
     plt.yticks([])
 
-    # convert mask into three-chennel image
-    mask = np.repeat(res[i], 3, axis=2)
-    # set average value as treshold to cut off the foreground
-    frame[mask < 0.5] *= 0
+    result = cv2.imread(
+        results_path[idx]
+    )
 
     plt.subplot(n_show, 2, i * 2 + 2)
-    plt.imshow(frame)
+    plt.imshow(result[:,:,::-1])
     
     plt.xticks([])
     plt.yticks([])
@@ -516,4 +502,4 @@ plt.show()
 ```
 
 
-![png](img/output_41_0.png)
+![png](img/output_23_0.png)
