@@ -280,7 +280,7 @@ plt.show()
 ```
 
 
-![png](img/output_12_0.png)
+![png](src/img/output_12_0.png)
 
 
 segmentation-models is an library that provides several models for image segmentation. <br>
@@ -411,7 +411,7 @@ plt.show()
 ```
 
 
-![png](img/output_18_0.png)
+![png](src/img/output_18_0.png)
 
 
 Load the best weights.
@@ -499,4 +499,4 @@ plt.show()
 ```
 
 
-![png](img/output_23_0.png)
+![png](src/img/output_23_0.png)
