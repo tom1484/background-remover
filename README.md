@@ -437,13 +437,13 @@ results_source_dir = "data/results/source"
 results_dir = "data/results"
 
 results_source_path = glob.glob(join(results_source_dir, "*.jpg"))
-n_test = len(results_source_path)
+n_test = 100
 ```
 
 
 ```python
 frames = []
-for path in results_source_path:   
+for path in results_source_path[:n_test]:   
     
     frames.append(cv2.imread(path))
 
